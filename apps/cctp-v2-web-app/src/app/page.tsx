@@ -177,7 +177,7 @@ export default function Home() {
               max={parseFloat(balance)}
               step="any"
             />
-            <p className="text-sm text-muted-foreground">{balance} available</p>
+            <p className="text-sm text-muted-foreground">{balance} USDC available</p>
           </div>
 
           <div className="text-center">

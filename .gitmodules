@@ -1,0 +1,3 @@
+[submodule "packages/arbitrum-vibekit"]
+	path = packages/arbitrum-vibekit
+	url = https://github.com/EmberAGI/arbitrum-vibekit.git
