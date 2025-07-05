@@ -42,7 +42,6 @@ lerna-debug.log*
 .history/
 *~
 .*.swp
-.cursor/
 
 # Logs
 logs/
