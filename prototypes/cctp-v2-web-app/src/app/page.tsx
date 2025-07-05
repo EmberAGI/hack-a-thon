@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCrossChainTransfer } from "@/hooks/use-cross-chain-transfer";
+import { WalletConnect } from "@/components/WalletConnect";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -25,13 +26,21 @@ import { Timer } from "@/components/timer";
 import { TransferTypeSelector } from "@/components/transfer-type";
 
 export default function Home() {
-  const { currentStep, logs, error, executeTransfer, getBalance, reset } =
-    useCrossChainTransfer();
+  const {
+    currentStep,
+    logs,
+    error,
+    executeTransfer,
+    getBalance,
+    reset,
+    isWalletConnected,
+    walletAddress,
+  } = useCrossChainTransfer();
   const [sourceChain, setSourceChain] = useState<SupportedChainId>(
-    SupportedChainId.ETH_SEPOLIA,
+    SupportedChainId.ETH_SEPOLIA
   );
   const [destinationChain, setDestinationChain] = useState<SupportedChainId>(
-    SupportedChainId.AVAX_FUJI,
+    SupportedChainId.AVAX_FUJI
   );
   const [amount, setAmount] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -49,7 +58,7 @@ export default function Home() {
         sourceChain,
         destinationChain,
         amount,
-        transferType,
+        transferType
       );
     } catch (error) {
       console.error("Transfer failed:", error);
@@ -69,23 +78,37 @@ export default function Home() {
   useEffect(() => {
     const wrapper = async () => {
       try {
-        const balance = await getBalance(sourceChain);
-        setBalance(balance);
+        // Only fetch balance when wallet is connected
+        if (isWalletConnected) {
+          const balance = await getBalance(sourceChain);
+          setBalance(balance);
+        } else {
+          // Show "0" when wallet is not connected
+          setBalance("0");
+        }
       } catch (error) {
         console.error("Failed to get balance:", error);
         setBalance("0");
       }
     };
     wrapper();
-  }, [sourceChain]);
+  }, [sourceChain, isWalletConnected, getBalance]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
+      {/* Header with Wallet Connect */}
+      <div className="max-w-3xl mx-auto mb-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Cross-Chain USDC Transfer
+          </h1>
+          <WalletConnect />
+        </div>
+      </div>
+
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
-          <CardTitle className="text-center">
-            Cross-Chain USDC Transfer
-          </CardTitle>
+          <CardTitle className="text-center">Transfer Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
@@ -132,7 +155,7 @@ export default function Home() {
                 </SelectTrigger>
                 <SelectContent>
                   {SUPPORTED_CHAINS.filter(
-                    (chainId) => chainId !== sourceChain,
+                    (chainId) => chainId !== sourceChain
                   ).map((chainId) => (
                     <SelectItem key={chainId} value={String(chainId)}>
                       {CHAIN_TO_CHAIN_NAME[chainId]}
