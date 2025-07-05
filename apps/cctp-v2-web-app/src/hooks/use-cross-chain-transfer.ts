@@ -847,7 +847,7 @@ export function useCrossChainTransfer() {
         destinationClient = getSolanaKeypair(privateKey);
         defaultDestination = destinationClient.publicKey.toString();
       } else {
-        destinationClient = await ensureWalletReady(destinationChainId);
+        destinationClient = await ensureWalletReady(sourceChainId);
         defaultDestination = walletAddress!;
       }
 
