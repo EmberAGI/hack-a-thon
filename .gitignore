@@ -1,0 +1,98 @@
+# Node.js / TypeScript
+node_modules/
+dist/
+build/
+coverage/
+.pnpm-store/
+.npm/
+.pnpm-debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# TypeScript cache
+*.tsbuildinfo
+.eslintcache
+
+# Testing
+.coverage/
+.nyc_output/
+
+# IDE / Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.history/
+*~
+.*.swp
+.cursor/
+
+# Logs
+logs/
+*.log
+
+# Build artifacts
+.turbo
+.cache/
+.vercel
+.next/
+
+# Package managers
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Next.js
+.turbo
+.next
+.vercel
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/*
+
+# Rust (for any Rust components)
+target/
+Cargo.lock
+**/*.rs.bk
+**/*.pdb
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Lock files (optional - you may want to commit these)
+# Uncomment if you want to ignore lock files
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml 

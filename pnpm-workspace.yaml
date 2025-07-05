@@ -1,0 +1,9 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  # Arbitrum Vibekit - only the packages we need
+  - 'packages/arbitrum-vibekit/typescript/lib/arbitrum-vibekit-core'
+  - 'packages/arbitrum-vibekit/typescript/lib/ember-schemas'
+  - 'packages/arbitrum-vibekit/typescript/lib/mcp-tools/emberai-mcp'
+  # Agents
+  - 'agents/*' 
