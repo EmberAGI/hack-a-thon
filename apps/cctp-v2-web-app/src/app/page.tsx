@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCrossChainTransfer } from "@/hooks/use-cross-chain-transfer";
+import { useWalletIntegration } from "@/hooks/useWalletIntegration";
 import { WalletConnect } from "@/components/WalletConnect";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,14 @@ export default function Home() {
     isWalletConnected,
     walletAddress,
   } = useCrossChainTransfer();
+  
+  const {
+    currentChainId,
+    isSwitchingChain,
+    chainSwitchError,
+    switchChain,
+    isOnCorrectChain,
+  } = useWalletIntegration();
   const [sourceChain, setSourceChain] = useState<SupportedChainId>(
     SupportedChainId.ETH_SEPOLIA
   );
@@ -166,6 +175,46 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Chain Mismatch Warning */}
+          {isWalletConnected && currentChainId && !isOnCorrectChain(sourceChain) && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2">
+                <div className="text-yellow-600">⚠️</div>
+                <div>
+                  <h3 className="text-sm font-medium text-yellow-800">
+                    Wrong Network Connected
+                  </h3>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Your wallet is connected to{" "}
+                    <span className="font-medium">
+                      {CHAIN_TO_CHAIN_NAME[currentChainId] || `Chain ${currentChainId}`}
+                    </span>{" "}
+                    but you need{" "}
+                    <span className="font-medium">
+                      {CHAIN_TO_CHAIN_NAME[sourceChain]}
+                    </span>{" "}
+                    for this transfer.
+                  </p>
+                  <div className="mt-3">
+                    <Button
+                      size="sm"
+                      onClick={() => switchChain(sourceChain)}
+                      disabled={isSwitchingChain}
+                      className="bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      {isSwitchingChain
+                        ? "Switching..."
+                        : `Switch to ${CHAIN_TO_CHAIN_NAME[sourceChain]}`}
+                    </Button>
+                  </div>
+                  {chainSwitchError && (
+                    <p className="text-sm text-red-600 mt-2">{chainSwitchError}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Amount (USDC)</Label>
             <Input
@@ -207,10 +256,16 @@ export default function Home() {
           <div className="flex justify-center gap-4">
             <Button
               onClick={handleStartTransfer}
-              disabled={isTransferring || currentStep === "completed"}
+              disabled={
+                isTransferring || 
+                currentStep === "completed" || 
+                (isWalletConnected && currentChainId && !isOnCorrectChain(sourceChain))
+              }
             >
               {currentStep === "completed"
                 ? "Transfer Complete"
+                : isWalletConnected && currentChainId && !isOnCorrectChain(sourceChain)
+                ? "Switch Network First"
                 : "Start Transfer"}
             </Button>
             {(currentStep === "completed" || currentStep === "error") && (

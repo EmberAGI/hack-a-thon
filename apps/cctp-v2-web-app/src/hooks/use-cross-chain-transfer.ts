@@ -120,6 +120,9 @@ export function useCrossChainTransfer() {
     walletAddress,
     switchChain,
     currentChainId,
+    isSwitchingChain,
+    chainSwitchError,
+    isOnCorrectChain,
   } = useWalletIntegration();
 
   const DEFAULT_DECIMALS = 6;
