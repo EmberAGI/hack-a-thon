@@ -1,0 +1,109 @@
+# Project: Multi-Agent Payment Workflow (Hackathon)
+Last Updated: 2025-01-05T00:05:00Z
+Current Role: Planner
+
+## Background and Motivation
+**HACKATHON PROJECT**: This is a proof-of-concept for a hackathon. We prioritize working demos over production-ready code, avoiding edge cases and complex error handling.
+
+The user requires three Vibekit agents – Scope Agent, Coder Agent, and Payment Agent – each with its own EOA wallet. The primary functional focus is the Payment Agent. It must:
+1. Receive a payment request specifying an amount of USDC.
+2. Generate unsigned transaction data for the payment (to be signed by the payer).
+3. Detect when payment is fulfilled on-chain.
+4. Split the received funds between the Scope and Coder agents based on a configurable percentage and transfer the respective USDC amounts to their wallets.
+
+## Key Challenges and Analysis (Simplified for Hackathon)
+- **Wallet Management**: Generate three EOA wallets via script, store in `.env` (no encryption needed for demo).
+- **Transaction Data Generation**: Basic USDC transfer encoding - assume happy path only.
+- **Payment Detection**: Simple polling of Graph API - no retry logic or error handling.
+- **Splitting Logic**: Basic percentage math - no edge case handling for dust amounts.
+- **Security**: Not a concern for hackathon - focus on functionality.
+- **Testing**: Manual testing only - no unit tests, just verify it works during development.
+
+## High-level Task Breakdown
+### Task 1: Workspace & Wallet Bootstrapping
+- Description: Create three Vibekit agent packages and generate EOA wallets for each.
+- Success Criteria: `pnpm build` succeeds; `.env` holds three private keys.
+- Dependencies: None
+- Status: Not Started
+
+### Task 2: Payment Agent Skeleton
+- Description: Scaffold Payment Agent with basic MCP server, single skill (`payment-processing`).
+- Success Criteria: Agent starts with `pnpm dev`.
+- Dependencies: Task 1
+- Status: Not Started
+
+### Task 3: Payment Transaction & Auto-Split Workflow
+- Description: Implement `createPaymentTransaction` tool that generates transaction data AND starts a listener that automatically splits/distributes funds upon payment detection.
+- Success Criteria: Single tool call creates tx data and handles entire payment flow.
+- Dependencies: Task 2
+- Status: Not Started
+
+### Task 4: Graph API Integration
+- Description: Implement polling mechanism within the payment listener for detecting USDC transfers.
+- Success Criteria: Listener detects incoming payments and triggers split distribution.
+- Dependencies: Task 3
+- Status: Not Started
+
+### Task 5: Demo Script
+- Description: Create a simple demo flow script.
+- Success Criteria: Can run through entire flow for judges.
+- Dependencies: Tasks 1-4
+- Status: Not Started
+
+## Project Status Board
+- [ ] 1.1 Initialize PNPM workspace packages for three agents
+- [ ] 1.2 Create wallet generation script
+- [ ] 1.3 Run script and populate .env files
+- [ ] 2.1 Scaffold Payment Agent with minimal boilerplate
+- [ ] 3.1 Implement `createPaymentTransaction` tool with embedded listener
+- [ ] 3.2 Add split/pay logic to the listener callback
+- [ ] 4.1 Integrate Graph API polling into the listener
+- [ ] 5.1 Create demo script with clear steps
+
+## Current Status / Progress Tracking
+Project initialized – planning phase only.
+
+## Executor's Feedback or Assistance Requests
+N/A – awaiting executor hand-off.
+
+## Lessons Learned
+
+## Rationale Log
+- **Decision:** Generate unsigned transaction data instead of pre-signed payment links.
+  **Rationale:** Allows payers to sign with their own wallets; more standard Web3 pattern.
+  **Trade-offs:** Requires payer to have wallet integration vs. simpler link sharing.
+  **Date:** 2025-01-05
+
+- **Decision:** Generate private keys directly via script instead of using seed phrases.
+  **Rationale:** Simpler implementation, fewer dependencies, and agents don't need HD wallet features. Direct private key generation with ethers.js/viem is straightforward and secure for EOA wallets.
+  **Trade-offs:** No mnemonic backup (but we can backup private keys), no derivation paths (not needed for single addresses).
+  **Date:** 2025-01-05
+
+- **Decision:** Use The Graph Token API transfers endpoint for payment detection.
+  **Rationale:** Simplifies monitoring by using a reliable indexing service, avoiding WebSocket management and reducing infrastructure overhead.
+  **Trade-offs:** Slight dependency on Graph API availability; potential indexing delays vs. direct node connection.
+  **Date:** 2025-01-05
+
+- **Decision:** Hackathon approach - skip edge cases and error handling.
+  **Rationale:** Limited time, focus on demonstrable functionality. Judges care about concept and execution, not production readiness.
+  **Trade-offs:** Code won't handle failures gracefully, but will work for demo scenarios.
+  **Date:** 2025-01-05
+
+- **Decision:** No automated testing - manual verification only.
+  **Rationale:** Hackathon time constraints. Writing tests takes time away from features. Manual testing during development is sufficient for demo.
+  **Trade-offs:** No regression protection, but acceptable for one-time demo.
+  **Date:** 2025-01-05
+
+- **Decision:** Embed split/pay logic within createPaymentTransaction listener instead of separate tool.
+  **Rationale:** Simpler architecture - one tool handles the entire flow. Reduces complexity and tool count.
+  **Trade-offs:** Less modular, but perfect for hackathon demo where we control the flow.
+  **Date:** 2025-01-05
+
+## Version History
+- 2025-01-05: Initial project plan created
+- 2025-01-05: Updated to clarify unsigned transaction data generation instead of signed links
+- 2025-01-05: Added wallet generation script approach to reduce manual work
+- 2025-01-05: Switched payment detection to The Graph Token API transfers endpoint
+- 2025-01-05: Refocused plan for hackathon context - simplified all tasks
+- 2025-01-05: Simplified testing strategy to manual testing only
+- 2025-01-05: Consolidated split/pay into createPaymentTransaction listener
