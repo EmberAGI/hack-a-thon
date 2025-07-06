@@ -1,6 +1,6 @@
 # Project: Multi-Agent Payment Workflow (Hackathon)
-Last Updated: 2025-01-05T00:05:00Z
-Current Role: Planner
+Last Updated: 2025-01-05T01:00:00Z
+Current Role: Executor
 
 ## Background and Motivation
 **HACKATHON PROJECT**: This is a proof-of-concept for a hackathon. We prioritize working demos over production-ready code, avoiding edge cases and complex error handling.
@@ -19,49 +19,180 @@ The user requires three Vibekit agents – Scope Agent, Coder Agent, and Payment
 - **Security**: Not a concern for hackathon - focus on functionality.
 - **Testing**: Manual testing only - no unit tests, just verify it works during development.
 
+**2025-01-05T00:50:00Z - Payment Detection Analysis**
+Evaluating options for detecting USDC payments on Arbitrum:
+
+1. **The Graph (Original Plan)**
+   - Pros: Reliable indexing, well-documented
+   - Cons: Potential latency (10-30s), requires finding/deploying subgraph
+
+2. **Substreams API**
+   - Pros: Very low latency, real-time streaming
+   - Cons: More complex setup, might be overkill for hackathon
+
+3. **Direct RPC Event Polling**
+   - Pros: Simple, no external dependencies, immediate detection
+   - Cons: Requires RPC endpoint, slightly more code
+
+4. **Alchemy/Infura Webhooks**
+   - Pros: Push-based, reliable
+   - Cons: Requires account setup, webhook endpoint
+
+**Recommendation**: For hackathon simplicity, use **Direct RPC Event Polling**:
+- Poll `Transfer` events on USDC contract filtering by recipient
+- Use public RPC or Alchemy/Infura free tier
+- Simple interval-based polling (every 5 seconds)
+- Stop after detecting payment or timeout (5 minutes)
+
+This approach is straightforward, requires minimal setup, and provides reasonable latency for a demo.
+
+**Recommendation**: For hackathon simplicity, use **Direct RPC Event Polling**:
+- Poll `MintAndWithdraw` events on TokenMessenger contract
+- Use public RPC (Arbitrum Sepolia)
+- Fast interval-based polling (every 1 second)
+- Stop after detecting payment or timeout (5 minutes)
+
+This approach provides near real-time detection with 1-second latency, perfect for a demo.
+
+**Implementation Approach**:
+1. When `createPaymentTransaction` is called:
+   - Generate unsigned tx data for USDC transfer to Payment Agent
+   - Start background polling loop using viem's `getLogs`
+   - Return transaction data immediately to user
+   
+2. Background polling for CCTP mints:
+   - Every 1 second, check for `MintAndWithdraw` events
+   - Filter by TokenMessenger contract and Payment Agent as mintRecipient
+   - Event signature: `MintAndWithdraw(address indexed mintRecipient, uint256 amount, address indexed mintToken)`
+   - On detection: calculate split, send to Scope/Coder agents
+   - Stop after successful distribution or 5-minute timeout
+   
+3. Distribution transactions:
+   - Use viem's wallet client with private keys from .env
+   - Send two USDC transfers (one to each agent)
+   - Log success/failure for demo purposes
+
+**Required Environment Variables**:
+```
+PAYMENT_AGENT_PRIVATE_KEY=<from wallet generation>
+SCOPE_AGENT_ADDRESS=<from wallet generation>
+CODER_AGENT_ADDRESS=<from wallet generation>
+RPC_URL=https://arb1.arbitrum.io/rpc (or Alchemy/Infura)
+RPC_URL=https://sepolia-rollup.arbitrum.io/rpc (Arbitrum Sepolia public RPC)
+```
+
 ## High-level Task Breakdown
 ### Task 1: Workspace & Wallet Bootstrapping
 - Description: Create three Vibekit agent packages and generate EOA wallets for each.
 - Success Criteria: `pnpm build` succeeds; `.env` holds three private keys.
 - Dependencies: None
-- Status: Not Started
+- Status: Completed
 
 ### Task 2: Payment Agent Skeleton
 - Description: Scaffold Payment Agent with basic MCP server, single skill (`payment-processing`).
 - Success Criteria: Agent starts with `pnpm dev`.
 - Dependencies: Task 1
-- Status: Not Started
+- Status: Completed
 
 ### Task 3: Payment Transaction & Auto-Split Workflow
 - Description: Implement `createPaymentTransaction` tool that generates transaction data AND starts a listener that automatically splits/distributes funds upon payment detection.
 - Success Criteria: Single tool call creates tx data and handles entire payment flow.
 - Dependencies: Task 2
-- Status: Not Started
+- Status: Completed
 
-### Task 4: Graph API Integration
-- Description: Implement polling mechanism within the payment listener for detecting USDC transfers.
+### Task 4: RPC Event Polling Integration
+- Description: Implement event polling mechanism within the payment listener for detecting USDC transfers using viem.
 - Success Criteria: Listener detects incoming payments and triggers split distribution.
 - Dependencies: Task 3
-- Status: Not Started
+- Status: Completed
 
 ### Task 5: Demo Script
 - Description: Create a simple demo flow script.
 - Success Criteria: Can run through entire flow for judges.
 - Dependencies: Tasks 1-4
-- Status: Not Started
+- Status: Completed
 
 ## Project Status Board
-- [ ] 1.1 Initialize PNPM workspace packages for three agents
-- [ ] 1.2 Create wallet generation script
-- [ ] 1.3 Run script and populate .env files
-- [ ] 2.1 Scaffold Payment Agent with minimal boilerplate
-- [ ] 3.1 Implement `createPaymentTransaction` tool with embedded listener
-- [ ] 3.2 Add split/pay logic to the listener callback
-- [ ] 4.1 Integrate Graph API polling into the listener
-- [ ] 5.1 Create demo script with clear steps
+- [x] 1.1 Initialize PNPM workspace packages for three agents
+- [x] 1.2 Create wallet generation script
+- [x] 1.3 Run script and populate .env files
+- [x] 2.1 Scaffold Payment Agent with minimal boilerplate
+- [x] 3.1 Implement `createPaymentTransaction` tool with embedded listener
+- [x] 3.2 Add split/pay logic to the listener callback
+- [x] 4.1 Integrate RPC event polling into the listener using viem
+- [x] 5.1 Create demo script with clear steps
 
 ## Current Status / Progress Tracking
 Project initialized – planning phase only.
+
+**2025-01-05T00:10:00Z - Executor Starting**
+- Switching to Executor role
+- Beginning Task 1: Workspace & Wallet Bootstrapping
+
+**2025-01:00:00Z - Resuming as Executor**
+- Implementing CCTP mint detection with 1-second polling
+- Will detect MintAndWithdraw events on TokenMessenger contract
+- Beginning Task 3: Payment Transaction & Auto-Split Workflow
+
+**2025-01-05T00:25:00Z - Task 1 Complete**
+- Created three agent directories in `/agents/` (scope-agent, payment-agent, coder-agent)
+- Set up package.json and tsconfig.json for each agent
+- Created wallet generation script using viem
+- Generated EOA wallets:
+  - SCOPE_AGENT: 0x3F9032f96A64F3396FdFEEEe3f26B798B1a11b65
+  - PAYMENT_AGENT: 0xDd418eC7d4AfF6d199ACd537e962664f34c9F7c7
+  - CODER_AGENT: 0x3BE92Fe06409096711087280CD6661854Ca4724E
+- Installed all dependencies for each agent
+- Ready to begin Task 2: Payment Agent Skeleton
+
+**2025-01-05T00:40:00Z - Task 2 Complete**
+- Created Payment Agent structure following Vibekit v2 patterns
+- Implemented index.ts with proper Agent.create configuration
+- Created payment-processing skill with required tags and examples
+- Created createPaymentTransaction tool with basic structure
+- Agent builds successfully with `pnpm build`
+- Ready to implement payment detection and distribution logic
+
+**2025-01-05T00:45:00Z - Implementation Question**
+The Payment Agent is now running successfully on port 3002. Before implementing the payment detection logic, I need clarification:
+
+1. For The Graph API integration, should I use:
+   - The Graph's hosted service (deprecated but still works)
+   - The decentralized Graph Network
+   - A specific subgraph URL you have in mind?
+
+2. For the payment detection polling:
+   - Should it poll continuously in the background after tool execution?
+   - Or should it be a one-time check with a timeout?
+
+3. For the auto-distribution:
+   - Should I use the private keys from the .env files to sign transactions?
+   - What RPC endpoint should I use for Arbitrum?
+
+Please provide guidance on these implementation details.
+
+**2025-01-05T00:55:00Z - CCTP Investigation**
+The user clarified we need to detect cross-chain USDC mints, not simple transfers. Investigating the CCTP web app to understand the proper detection mechanism.
+
+**CCTP Understanding**:
+Circle's Cross-Chain Transfer Protocol (CCTP) works differently than simple transfers:
+1. **Source chain**: User calls `depositForBurn` on TokenMessenger contract
+2. **Attestation**: Circle's attestation service signs the burn event
+3. **Destination chain**: User calls `receiveMessage` on MessageTransmitter contract
+4. **Result**: TokenMessenger mints USDC to the recipient
+
+Key findings:
+- We need to detect the `MintAndWithdraw` event from TokenMessenger contract
+- On Arbitrum, the contracts are:
+  - USDC: `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` (Arbitrum Sepolia)
+  - MessageTransmitter: `0xe737e5cebeeba77efe34d4aa090756590b1ce275`
+  - TokenMessenger: `0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa`
+
+**Updated Detection Approach**:
+1. Poll for `MintAndWithdraw` events on TokenMessenger contract
+2. Filter by recipient (Payment Agent address)
+3. The event contains: amount, mintRecipient, sourceDomain, etc.
+4. This gives us immediate notification when CCTP mints USDC to our agent
 
 ## Executor's Feedback or Assistance Requests
 N/A – awaiting executor hand-off.
@@ -79,9 +210,14 @@ N/A – awaiting executor hand-off.
   **Trade-offs:** No mnemonic backup (but we can backup private keys), no derivation paths (not needed for single addresses).
   **Date:** 2025-01-05
 
-- **Decision:** Use The Graph Token API transfers endpoint for payment detection.
-  **Rationale:** Simplifies monitoring by using a reliable indexing service, avoiding WebSocket management and reducing infrastructure overhead.
-  **Trade-offs:** Slight dependency on Graph API availability; potential indexing delays vs. direct node connection.
+- **Decision:** Use direct RPC event polling instead of The Graph for payment detection.
+  **Rationale:** Simpler implementation, no external indexing dependencies, faster detection (5s vs 10-30s), uses standard Web3 patterns familiar to judges.
+  **Trade-offs:** More RPC calls vs. indexed queries, but acceptable for hackathon demo with low volume.
+  **Date:** 2025-01-05
+
+- **Decision:** Use direct RPC event polling for CCTP mint detection.
+  **Rationale:** Simpler implementation, no external indexing dependencies, very fast detection (1s polling), uses standard Web3 patterns familiar to judges.
+  **Trade-offs:** More RPC calls (1 per second) vs. indexed queries, but acceptable for hackathon demo with low volume and 5-minute timeout.
   **Date:** 2025-01-05
 
 - **Decision:** Hackathon approach - skip edge cases and error handling.
@@ -107,3 +243,28 @@ N/A – awaiting executor hand-off.
 - 2025-01-05: Refocused plan for hackathon context - simplified all tasks
 - 2025-01-05: Simplified testing strategy to manual testing only
 - 2025-01-05: Consolidated split/pay into createPaymentTransaction listener
+- 2025-01-05: Changed payment detection to direct RPC event polling for simplicity
+
+**2025-01-05T01:10:00Z - Tasks 3 & 4 Complete**
+- Implemented CCTP mint detection using MintAndWithdraw events
+- 1-second polling for near real-time detection
+- Automatic fund distribution to Scope and Coder agents
+- Uses viem for all blockchain interactions
+- 5-minute timeout for demo reliability
+- Ready for Task 5: Demo script
+
+**2025-01-05T01:15:00Z - Task 5 Complete - PROJECT COMPLETE!**
+- Created demo script showing complete payment flow
+- Added comprehensive README with setup instructions
+- All tasks completed successfully
+- Ready for hackathon demo
+
+**Final Implementation Summary:**
+- Payment Agent running on port 3002 with MCP interface
+- Detects CCTP MintAndWithdraw events with 1-second latency
+- Automatically distributes funds based on configurable split
+- Demo script provides clear walkthrough for judges
+- Wallet addresses:
+  - Payment Agent: 0xDd418eC7d4AfF6d199ACd537e962664f34c9F7c7
+  - Scope Agent: 0x3F9032f96A64F3396FdFEEe3f26B798B1a11b65
+  - Coder Agent: 0x3BE92Fe06409096711087280CD6661854Ca4724E
