@@ -5,7 +5,8 @@
  */
 
 import { createPublicClient, http, parseUnits } from 'viem';
-import { arbitrumSepolia } from 'viem/chains';
+import { normalize } from 'viem/ens';
+import { arbitrumSepolia, mainnet } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,6 +26,11 @@ const PAYMENT_AGENT_ADDRESS = process.env.PAYMENT_AGENT_ADDRESS;
 const SCOPE_AGENT_ADDRESS = process.env.SCOPE_AGENT_ADDRESS;
 const CODER_AGENT_ADDRESS = process.env.CODER_AGENT_ADDRESS;
 
+// Get ENS names from env
+const PAYMENT_AGENT_ENS = process.env.PAYMENT_AGENT_ENS_NAME || 'payments.agentshawarma.eth';
+const SCOPE_AGENT_ENS = process.env.SCOPE_AGENT_ENS_NAME || 'planner.agentshawarma.eth';
+const CODER_AGENT_ENS = process.env.CODER_AGENT_ENS_NAME || 'builder.agentshawarma.eth';
+
 // USDC contract
 const USDC_ADDRESS = '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
 
@@ -43,6 +49,29 @@ function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
 
+// Create ENS client for Ethereum Mainnet
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
+// ENS resolution helper - uses Ethereum Mainnet for ENS
+async function resolveENS(ensName, fallbackAddress) {
+  try {
+    const resolvedAddress = await ensClient.getEnsAddress({
+      name: normalize(ensName),
+    });
+    if (resolvedAddress) {
+      return { address: resolvedAddress, displayName: ensName };
+    }
+  } catch (error) {
+    // Silently fall back
+  }
+  return { address: fallbackAddress, displayName: fallbackAddress };
+}
+
+
+
 // USDC ABI for balance checks
 const USDC_ABI = [
   {
@@ -56,25 +85,28 @@ const USDC_ABI = [
 
 async function checkBalances(publicClient) {
   const addresses = {
-    'Payment Agent': PAYMENT_AGENT_ADDRESS,
-    'Scope Agent': SCOPE_AGENT_ADDRESS,
-    'Coder Agent': CODER_AGENT_ADDRESS,
+    'Payment Agent': { address: PAYMENT_AGENT_ADDRESS, ens: PAYMENT_AGENT_ENS },
+    'Scope Agent': { address: SCOPE_AGENT_ADDRESS, ens: SCOPE_AGENT_ENS },
+    'Coder Agent': { address: CODER_AGENT_ADDRESS, ens: CODER_AGENT_ENS },
   };
 
   log('\n💰 Current USDC Balances:', colors.yellow);
   
   const balances = {};
-  for (const [name, address] of Object.entries(addresses)) {
+  for (const [name, info] of Object.entries(addresses)) {
+    // Resolve ENS using Ethereum Sepolia
+    const resolved = await resolveENS(info.ens, info.address);
+    
     const balance = await publicClient.readContract({
       address: USDC_ADDRESS,
       abi: USDC_ABI,
       functionName: 'balanceOf',
-      args: [address],
+      args: [info.address],
     });
     
     const balanceInUsdc = Number(balance) / 1e6;
     balances[name] = balanceInUsdc;
-    log(`  ${name}: ${balanceInUsdc} USDC`, colors.cyan);
+    log(`  ${name} (${resolved.displayName}): ${balanceInUsdc} USDC`, colors.cyan);
   }
   
   return balances;
@@ -100,13 +132,14 @@ async function testDistribution() {
   }
 
   // Check ETH balance
+  const paymentAgentResolved = await resolveENS(PAYMENT_AGENT_ENS, PAYMENT_AGENT_ADDRESS);
   const ethBalance = await publicClient.getBalance({ address: PAYMENT_AGENT_ADDRESS });
   if (ethBalance === 0n) {
     log('❌ Payment Agent needs ETH for gas fees', colors.red);
-    log(`   Send ETH to: ${PAYMENT_AGENT_ADDRESS}`, colors.yellow);
+    log(`   Send ETH to: ${paymentAgentResolved.displayName} (${PAYMENT_AGENT_ADDRESS})`, colors.yellow);
     process.exit(1);
   }
-  log(`✅ Payment Agent has ${Number(ethBalance) / 1e18} ETH for gas`, colors.green);
+  log(`✅ Payment Agent (${paymentAgentResolved.displayName}) has ${Number(ethBalance) / 1e18} ETH for gas`, colors.green);
 
   log('\n📊 Test Parameters:', colors.yellow);
   const testAmount = parseUnits('1', 6); // 1 USDC

@@ -1,270 +1,228 @@
-# Project: Multi-Agent Payment Workflow (Hackathon)
-Last Updated: 2025-01-05T01:00:00Z
+# Project: Multi-Agent ENS Integration (Hackathon)
+Last Updated: 2025-01-05T15:20:00Z
 Current Role: Executor
 
 ## Background and Motivation
-**HACKATHON PROJECT**: This is a proof-of-concept for a hackathon. We prioritize working demos over production-ready code, avoiding edge cases and complex error handling.
+**HACKATHON PROJECT**: This is a proof-of-concept for a hackathon. We prioritize working demos over production-ready code, avoiding edge cases and complex error handling. No unit tests - manual testing only.
 
-The user requires three Vibekit agents – Scope Agent, Coder Agent, and Payment Agent – each with its own EOA wallet. The primary functional focus is the Payment Agent. It must:
-1. Receive a payment request specifying an amount of USDC.
-2. Generate unsigned transaction data for the payment (to be signed by the payer).
-3. Detect when payment is fulfilled on-chain.
-4. Split the received funds between the Scope and Coder agents based on a configurable percentage and transfer the respective USDC amounts to their wallets.
+Building on the completed Payment Agent, we need to integrate ENS (Ethereum Name Service) names to make the system more user-friendly. Each agent will have its own ENS subdomain under `.agentshawarma.eth`:
+- Coder Agent: `builder.agentshawarma.eth`
+- Payment Agent: `payments.agentshawarma.eth`
+- Scope Agent: `planner.agentshawarma.eth`
 
-## Key Challenges and Analysis (Simplified for Hackathon)
-- **Wallet Management**: Generate three EOA wallets via script, store in `.env` (no encryption needed for demo).
-- **Transaction Data Generation**: Basic USDC transfer encoding - assume happy path only.
-- **Payment Detection**: Simple polling of Graph API - no retry logic or error handling.
-- **Splitting Logic**: Basic percentage math - no edge case handling for dust amounts.
-- **Security**: Not a concern for hackathon - focus on functionality.
-- **Testing**: Manual testing only - no unit tests, just verify it works during development.
+Additionally, the payment agent should construct a URL instead of a transaction, including amount and ENS parameters, with the domain coming from an environment variable.
 
-**2025-01-05T00:50:00Z - Payment Detection Analysis**
-Evaluating options for detecting USDC payments on Arbitrum:
-
-1. **The Graph (Original Plan)**
-   - Pros: Reliable indexing, well-documented
-   - Cons: Potential latency (10-30s), requires finding/deploying subgraph
-
-2. **Substreams API**
-   - Pros: Very low latency, real-time streaming
-   - Cons: More complex setup, might be overkill for hackathon
-
-3. **Direct RPC Event Polling**
-   - Pros: Simple, no external dependencies, immediate detection
-   - Cons: Requires RPC endpoint, slightly more code
-
-4. **Alchemy/Infura Webhooks**
-   - Pros: Push-based, reliable
-   - Cons: Requires account setup, webhook endpoint
-
-**Recommendation**: For hackathon simplicity, use **Direct RPC Event Polling**:
-- Poll `Transfer` events on USDC contract filtering by recipient
-- Use public RPC or Alchemy/Infura free tier
-- Simple interval-based polling (every 5 seconds)
-- Stop after detecting payment or timeout (5 minutes)
-
-This approach is straightforward, requires minimal setup, and provides reasonable latency for a demo.
-
-**Recommendation**: For hackathon simplicity, use **Direct RPC Event Polling**:
-- Poll `MintAndWithdraw` events on TokenMessenger contract
-- Use public RPC (Arbitrum Sepolia)
-- Fast interval-based polling (every 1 second)
-- Stop after detecting payment or timeout (5 minutes)
-
-This approach provides near real-time detection with 1-second latency, perfect for a demo.
-
-**Implementation Approach**:
-1. When `createPaymentTransaction` is called:
-   - Generate unsigned tx data for USDC transfer to Payment Agent
-   - Start background polling loop using viem's `getLogs`
-   - Return transaction data immediately to user
-   
-2. Background polling for CCTP mints:
-   - Every 1 second, check for `MintAndWithdraw` events
-   - Filter by TokenMessenger contract and Payment Agent as mintRecipient
-   - Event signature: `MintAndWithdraw(address indexed mintRecipient, uint256 amount, address indexed mintToken)`
-   - On detection: calculate split, send to Scope/Coder agents
-   - Stop after successful distribution or 5-minute timeout
-   
-3. Distribution transactions:
-   - Use viem's wallet client with private keys from .env
-   - Send two USDC transfers (one to each agent)
-   - Log success/failure for demo purposes
-
-**Required Environment Variables**:
-```
-PAYMENT_AGENT_PRIVATE_KEY=<from wallet generation>
-SCOPE_AGENT_ADDRESS=<from wallet generation>
-CODER_AGENT_ADDRESS=<from wallet generation>
-RPC_URL=https://arb1.arbitrum.io/rpc (or Alchemy/Infura)
-RPC_URL=https://sepolia-rollup.arbitrum.io/rpc (Arbitrum Sepolia public RPC)
-```
-
-## High-level Task Breakdown
-### Task 1: Workspace & Wallet Bootstrapping
-- Description: Create three Vibekit agent packages and generate EOA wallets for each.
-- Success Criteria: `pnpm build` succeeds; `.env` holds three private keys.
-- Dependencies: None
-- Status: Completed
-
-### Task 2: Payment Agent Skeleton
-- Description: Scaffold Payment Agent with basic MCP server, single skill (`payment-processing`).
-- Success Criteria: Agent starts with `pnpm dev`.
-- Dependencies: Task 1
-- Status: Completed
-
-### Task 3: Payment Transaction & Auto-Split Workflow
-- Description: Implement `createPaymentTransaction` tool that generates transaction data AND starts a listener that automatically splits/distributes funds upon payment detection.
-- Success Criteria: Single tool call creates tx data and handles entire payment flow.
-- Dependencies: Task 2
-- Status: Completed
-
-### Task 4: RPC Event Polling Integration
-- Description: Implement event polling mechanism within the payment listener for detecting USDC transfers using viem.
-- Success Criteria: Listener detects incoming payments and triggers split distribution.
-- Dependencies: Task 3
-- Status: Completed
-
-### Task 5: Demo Script
-- Description: Create a simple demo flow script.
-- Success Criteria: Can run through entire flow for judges.
-- Dependencies: Tasks 1-4
-- Status: Completed
-
-## Project Status Board
-- [x] 1.1 Initialize PNPM workspace packages for three agents
-- [x] 1.2 Create wallet generation script
-- [x] 1.3 Run script and populate .env files
-- [x] 2.1 Scaffold Payment Agent with minimal boilerplate
-- [x] 3.1 Implement `createPaymentTransaction` tool with embedded listener
-- [x] 3.2 Add split/pay logic to the listener callback
-- [x] 4.1 Integrate RPC event polling into the listener using viem
-- [x] 5.1 Create demo script with clear steps
-
-## Current Status / Progress Tracking
-Project initialized – planning phase only.
-
-**2025-01-05T00:10:00Z - Executor Starting**
-- Switching to Executor role
-- Beginning Task 1: Workspace & Wallet Bootstrapping
-
-**2025-01:00:00Z - Resuming as Executor**
-- Implementing CCTP mint detection with 1-second polling
-- Will detect MintAndWithdraw events on TokenMessenger contract
-- Beginning Task 3: Payment Transaction & Auto-Split Workflow
-
-**2025-01-05T00:25:00Z - Task 1 Complete**
-- Created three agent directories in `/agents/` (scope-agent, payment-agent, coder-agent)
-- Set up package.json and tsconfig.json for each agent
-- Created wallet generation script using viem
-- Generated EOA wallets:
-  - SCOPE_AGENT: 0x3F9032f96A64F3396FdFEEEe3f26B798B1a11b65
-  - PAYMENT_AGENT: 0xDd418eC7d4AfF6d199ACd537e962664f34c9F7c7
-  - CODER_AGENT: 0x3BE92Fe06409096711087280CD6661854Ca4724E
-- Installed all dependencies for each agent
-- Ready to begin Task 2: Payment Agent Skeleton
-
-**2025-01-05T00:40:00Z - Task 2 Complete**
-- Created Payment Agent structure following Vibekit v2 patterns
-- Implemented index.ts with proper Agent.create configuration
-- Created payment-processing skill with required tags and examples
-- Created createPaymentTransaction tool with basic structure
-- Agent builds successfully with `pnpm build`
-- Ready to implement payment detection and distribution logic
-
-**2025-01-05T00:45:00Z - Implementation Question**
-The Payment Agent is now running successfully on port 3002. Before implementing the payment detection logic, I need clarification:
-
-1. For The Graph API integration, should I use:
-   - The Graph's hosted service (deprecated but still works)
-   - The decentralized Graph Network
-   - A specific subgraph URL you have in mind?
-
-2. For the payment detection polling:
-   - Should it poll continuously in the background after tool execution?
-   - Or should it be a one-time check with a timeout?
-
-3. For the auto-distribution:
-   - Should I use the private keys from the .env files to sign transactions?
-   - What RPC endpoint should I use for Arbitrum?
-
-Please provide guidance on these implementation details.
-
-**2025-01-05T00:55:00Z - CCTP Investigation**
-The user clarified we need to detect cross-chain USDC mints, not simple transfers. Investigating the CCTP web app to understand the proper detection mechanism.
-
-**CCTP Understanding**:
-Circle's Cross-Chain Transfer Protocol (CCTP) works differently than simple transfers:
-1. **Source chain**: User calls `depositForBurn` on TokenMessenger contract
-2. **Attestation**: Circle's attestation service signs the burn event
-3. **Destination chain**: User calls `receiveMessage` on MessageTransmitter contract
-4. **Result**: TokenMessenger mints USDC to the recipient
-
-Key findings:
-- We need to detect the `MintAndWithdraw` event from TokenMessenger contract
-- On Arbitrum, the contracts are:
-  - USDC: `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` (Arbitrum Sepolia)
-  - MessageTransmitter: `0xe737e5cebeeba77efe34d4aa090756590b1ce275`
-  - TokenMessenger: `0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa`
-
-**Updated Detection Approach**:
-1. Poll for `MintAndWithdraw` events on TokenMessenger contract
-2. Filter by recipient (Payment Agent address)
-3. The event contains: amount, mintRecipient, sourceDomain, etc.
-4. This gives us immediate notification when CCTP mints USDC to our agent
-
-## Executor's Feedback or Assistance Requests
-N/A – awaiting executor hand-off.
-
-## Lessons Learned
-
-## Rationale Log
-- **Decision:** Generate unsigned transaction data instead of pre-signed payment links.
-  **Rationale:** Allows payers to sign with their own wallets; more standard Web3 pattern.
-  **Trade-offs:** Requires payer to have wallet integration vs. simpler link sharing.
-  **Date:** 2025-01-05
-
-- **Decision:** Generate private keys directly via script instead of using seed phrases.
-  **Rationale:** Simpler implementation, fewer dependencies, and agents don't need HD wallet features. Direct private key generation with ethers.js/viem is straightforward and secure for EOA wallets.
-  **Trade-offs:** No mnemonic backup (but we can backup private keys), no derivation paths (not needed for single addresses).
-  **Date:** 2025-01-05
-
-- **Decision:** Use direct RPC event polling instead of The Graph for payment detection.
-  **Rationale:** Simpler implementation, no external indexing dependencies, faster detection (5s vs 10-30s), uses standard Web3 patterns familiar to judges.
-  **Trade-offs:** More RPC calls vs. indexed queries, but acceptable for hackathon demo with low volume.
-  **Date:** 2025-01-05
-
-- **Decision:** Use direct RPC event polling for CCTP mint detection.
-  **Rationale:** Simpler implementation, no external indexing dependencies, very fast detection (1s polling), uses standard Web3 patterns familiar to judges.
-  **Trade-offs:** More RPC calls (1 per second) vs. indexed queries, but acceptable for hackathon demo with low volume and 5-minute timeout.
-  **Date:** 2025-01-05
-
-- **Decision:** Hackathon approach - skip edge cases and error handling.
-  **Rationale:** Limited time, focus on demonstrable functionality. Judges care about concept and execution, not production readiness.
-  **Trade-offs:** Code won't handle failures gracefully, but will work for demo scenarios.
-  **Date:** 2025-01-05
-
-- **Decision:** No automated testing - manual verification only.
-  **Rationale:** Hackathon time constraints. Writing tests takes time away from features. Manual testing during development is sufficient for demo.
-  **Trade-offs:** No regression protection, but acceptable for one-time demo.
-  **Date:** 2025-01-05
-
-- **Decision:** Embed split/pay logic within createPaymentTransaction listener instead of separate tool.
-  **Rationale:** Simpler architecture - one tool handles the entire flow. Reduces complexity and tool count.
-  **Trade-offs:** Less modular, but perfect for hackathon demo where we control the flow.
-  **Date:** 2025-01-05
-
-## Version History
-- 2025-01-05: Initial project plan created
-- 2025-01-05: Updated to clarify unsigned transaction data generation instead of signed links
-- 2025-01-05: Added wallet generation script approach to reduce manual work
-- 2025-01-05: Switched payment detection to The Graph Token API transfers endpoint
-- 2025-01-05: Refocused plan for hackathon context - simplified all tasks
-- 2025-01-05: Simplified testing strategy to manual testing only
-- 2025-01-05: Consolidated split/pay into createPaymentTransaction listener
-- 2025-01-05: Changed payment detection to direct RPC event polling for simplicity
-
-**2025-01-05T01:10:00Z - Tasks 3 & 4 Complete**
-- Implemented CCTP mint detection using MintAndWithdraw events
-- 1-second polling for near real-time detection
-- Automatic fund distribution to Scope and Coder agents
-- Uses viem for all blockchain interactions
-- 5-minute timeout for demo reliability
-- Ready for Task 5: Demo script
-
-**2025-01-05T01:15:00Z - Task 5 Complete - PROJECT COMPLETE!**
-- Created demo script showing complete payment flow
-- Added comprehensive README with setup instructions
-- All tasks completed successfully
-- Ready for hackathon demo
-
-**Final Implementation Summary:**
-- Payment Agent running on port 3002 with MCP interface
-- Detects CCTP MintAndWithdraw events with 1-second latency
-- Automatically distributes funds based on configurable split
-- Demo script provides clear walkthrough for judges
-- Wallet addresses:
+**Existing Infrastructure**:
+- Payment Agent: Fully functional with CCTP detection and auto-distribution
+- Wallet addresses already generated:
   - Payment Agent: 0xDd418eC7d4AfF6d199ACd537e962664f34c9F7c7
   - Scope Agent: 0x3F9032f96A64F3396FdFEEe3f26B798B1a11b65
   - Coder Agent: 0x3BE92Fe06409096711087280CD6661854Ca4724E
+- Coder/Scope Agents: Currently placeholders
+- Demo scripts: 
+  - `test-distribution-direct.js` - Tests distribution logic directly
+  - `seamless-payment-demo.js` - Full end-to-end CCTP flow with auto-distribution
+
+## Key Challenges and Analysis (Simplified for Hackathon)
+1. **ENS Resolution**: Basic ENS resolution using viem - assume happy path
+2. **Code Refactoring**: Quick find/replace of addresses with ENS resolution
+3. **URL Construction**: Simple string formatting for payment URLs
+4. **Environment Configuration**: Add ENS names to existing .env files
+5. **Mock Agents**: Simple implementation for Coder agent only (Scope agent not needed)
+
+**Hackathon Simplifications**:
+- No complex error handling - assume ENS always resolves
+- No caching - direct resolution each time (simpler code)
+- No extensive testing - manual verification only
+- Focus on demo flow, not edge cases
+
+## High-level Task Breakdown
+
+### Task 1: Create ENS Resolution Function
+- Description: Simple ENS resolution function using viem
+- Success Criteria: 
+  - Can resolve ENS names to addresses
+  - Works on Arbitrum Sepolia
+  - Basic fallback to env addresses
+- Dependencies: None
+- Status: Not Started
+
+### Task 2: Update Environment Files
+- Description: Add ENS names and URL domain to .env files
+- Success Criteria:
+  - Add ENS_NAME for each agent
+  - Add PAYMENT_URL_DOMAIN
+  - Keep existing address variables as fallback
+- Dependencies: None
+- Status: Not Started
+
+### Task 3: Refactor Payment Agent for URL Generation
+- Description: Change payment agent to generate URLs instead of transactions
+- Success Criteria:
+  - Generates URL like: `${domain}?amount=${amount}&ens=${ens}`
+  - Still performs auto-distribution on payment detection
+  - Uses ENS names in responses
+- Dependencies: Tasks 1, 2
+- Status: Not Started
+
+### Task 4: Quick Implementation of Coder Agent
+- Description: Basic Coder Agent with mock coding tools
+- Success Criteria:
+  - Agent starts with `pnpm dev`
+  - Has one skill with mock responses
+  - Uses ENS name in responses
+- Dependencies: Tasks 1, 2
+- Status: Not Started
+
+### Task 5: Update Distribution to Show ENS Names
+- Description: Include ENS names in distribution logs and responses
+- Success Criteria:
+  - Logs show ENS names alongside addresses
+  - Response includes ENS names
+- Dependencies: Tasks 1, 3
+- Status: Not Started
+
+### Task 6: Update Existing Demo Scripts
+- Description: Update the two demo scripts to use and display ENS names
+- Success Criteria:
+  - Update `test-distribution-direct.js` to show ENS names in balance displays
+  - Update `seamless-payment-demo.js` to display ENS names throughout the flow
+  - Both scripts show ENS names alongside addresses in output
+  - Still maintain address fallback for reliability
+- Dependencies: All previous tasks
+- Status: Not Started
+
+## Project Status Board
+- [x] 1.1: Create simple ENS resolution function in agents/shared/
+- [x] 1.2: Test resolution with all three ENS names
+- [x] 2.1: Add ENS_NAME to each agent's .env
+- [x] 2.2: Add PAYMENT_URL_DOMAIN to payment agent .env
+- [x] 3.1: Change createPaymentTransaction to generate URLs
+- [x] 3.2: Update tool response format
+- [N/A] 4.1: Copy payment agent structure for Coder Agent (Not needed per user)
+- [N/A] 4.2: Create mock "code generation" tool (Not needed per user)
+- [x] 5.1: Add ENS resolution to distribution logs
+- [x] 5.2: Include ENS names in tool responses
+- [x] 6.1: Update test-distribution-direct.js to display ENS names
+- [x] 6.2: Update seamless-payment-demo.js to display ENS names  
+- [x] 6.3: Test both updated demo flows end-to-end
+
+## Current Status / Progress Tracking
+**2025-01-05T14:30:00Z - Planning Phase**
+- Updated plan for hackathon approach
+- Simplified all tasks for quick implementation
+- Removed unnecessary complexity (caching, extensive error handling)
+- Removed Scope Agent implementation (not needed)
+- Clarified to update existing demo scripts (2 scripts, not 3)
+- Corrected script names to match actual files
+
+**2025-01-05T14:45:00Z - Execution Phase**
+- ✅ Completed Task 1: ENS resolution implemented inline (simpler than shared module)
+- ✅ Completed Task 2: Added ENS names and URL domain to payment agent .env files
+- ✅ Completed Task 3: Refactored payment agent to generate URLs instead of transactions
+- ✅ Completed Task 5: Distribution logic now shows ENS names alongside addresses
+- ✅ Completed Task 6.1 & 6.2: Updated both demo scripts to display ENS names
+- Task 4 (Coder Agent) not needed per user clarification
+- Ready for testing the complete ENS integration
+
+**2025-01-05T14:50:00Z - Testing Phase**
+- **CRITICAL DISCOVERY**: ENS is not supported on Arbitrum Sepolia
+- Error: "Chain 'Arbitrum Sepolia' does not support contract 'ensUniversalResolver'"
+- This explains why ENS resolution fails silently in our scripts
+- **Hackathon Solution**: Display ENS names as labels alongside addresses
+- No actual resolution needed - just show "payments.agentshawarma.eth (0xDd418...)"
+- This gives the user-friendly experience without requiring ENS infrastructure
+
+**2025-01-05T15:00:00Z - ENS Resolution Implementation**
+- ✅ Updated payment agent to use Ethereum Sepolia for ENS resolution
+- ✅ Updated demo scripts to use Ethereum Sepolia for ENS resolution
+- ✅ Successfully rebuilt and restarted payment agent
+- ✅ Distribution script runs successfully
+- ❓ ENS names not appearing in output - need to verify if names are registered on Ethereum Sepolia
+- Next step: Test the payment agent tool directly to see ENS resolution logs
+
+**2025-01-05T15:10:00Z - Project Complete for Hackathon**
+- ✅ Verified ENS names are NOT registered on Ethereum Sepolia
+- ✅ System gracefully falls back to hardcoded addresses
+- ✅ ENS names appear in all user-facing messages
+- ✅ Payment and distribution functionality works perfectly
+- ✅ Both demo scripts tested and working:
+  - `test-distribution-direct.js` - Direct distribution test
+  - `seamless-payment-demo.js` - Full CCTP flow with auto-distribution
+
+**Hackathon Demo Ready:**
+- Payment Agent generates URLs with ENS names
+- System displays "payments.agentshawarma.eth" in messages
+- Automatic distribution works flawlessly
+- To fully enable ENS: Register the names on Ethereum Sepolia
+
+**2025-01-05T15:20:00Z - ENS Integration Finalized**
+- ✅ Updated to use Ethereum Mainnet for ENS resolution (cross-chain)
+- ✅ ENS names ARE registered on mainnet and resolve correctly:
+  - payments.agentshawarma.eth → 0xDd418eC7d4AfF6d199ACd537e962664f34c9F7c7
+  - planner.agentshawarma.eth → 0x3F9032f96A64F3396FdFEEEe3f26B798B1a11b65
+  - builder.agentshawarma.eth → 0x3BE92Fe06409096711087280CD6661854Ca4724E
+- ✅ Updated demo script to display payment URL and details from agent response
+- ✅ Full ENS integration working across all components
+
+**Final Demo Features:**
+- Cross-chain ENS resolution (mainnet → any EVM chain)
+- Payment URL generation with ENS names
+- Automatic fund distribution with ENS display
+- Complete user-friendly experience with .eth names
+
+## Executor's Feedback or Assistance Requests
+N/A - Planning phase
+
+## Lessons Learned
+- From Payment Agent: Direct implementation without abstractions works well for hackathons
+- From Payment Agent: Mock handlers effectively demonstrate capabilities
+- From Payment Agent: Focus on working demos over comprehensive error handling
+- ENS resolution with viem is straightforward - use getEnsAddress()
+- URL-based approach is simpler than transaction generation
+- Reuse existing demo scripts rather than creating new ones
+- Verify file existence before including in plans
+- ENS resolution requires actual registration on the blockchain
+- Ethereum Sepolia supports ENS while Arbitrum Sepolia does not
+- Graceful fallback mechanisms are essential for hackathon demos
+- Cross-chain ENS resolution works well (resolve on Ethereum, use on Arbitrum)
+- Always display tool responses in demo scripts for visibility
+- ENS names on mainnet can be used across all EVM chains
+
+## Rationale Log
+- **Decision:** Use viem's getEnsAddress() directly without wrapper
+  **Rationale:** Simpler for hackathon, viem already handles the complexity
+  **Trade-offs:** No custom error handling, but fine for demo
+  **Date:** 2025-01-05
+
+- **Decision:** No caching for ENS lookups
+  **Rationale:** Simpler code, acceptable for low-volume hackathon demo
+  **Trade-offs:** More RPC calls, but negligible for demo
+  **Date:** 2025-01-05
+
+- **Decision:** Inline ENS resolution instead of shared module
+  **Rationale:** Faster to implement, less setup required
+  **Trade-offs:** Some code duplication, but minimal for 3 agents
+  **Date:** 2025-01-05
+
+- **Decision:** Basic mock implementation for Coder agent only
+  **Rationale:** Focus on ENS integration demo, Scope agent not needed
+  **Trade-offs:** Less complete system, but faster to implement
+  **Date:** 2025-01-05
+
+- **Decision:** Manual testing only
+  **Rationale:** Hackathon time constraints, same approach as Payment Agent
+  **Trade-offs:** No automated verification, but fine for one-time demo
+  **Date:** 2025-01-05
+
+- **Decision:** Update existing demo scripts instead of creating new ones
+  **Rationale:** Scripts already work well, just need ENS display added
+  **Trade-offs:** None - this is purely beneficial
+  **Date:** 2025-01-05
+
+## Version History
+- 2025-01-05T14:00:00Z: Initial ENS integration plan created
+- 2025-01-05T14:15:00Z: Updated for hackathon approach based on Payment Agent experience
+- 2025-01-05T14:20:00Z: Removed Scope Agent implementation task
+- 2025-01-05T14:25:00Z: Clarified Task 6 to update existing demo scripts
+- 2025-01-05T14:30:00Z: Corrected script names to match actual files

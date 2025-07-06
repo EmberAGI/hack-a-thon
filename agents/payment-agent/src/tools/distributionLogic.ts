@@ -11,7 +11,8 @@ import {
   http,
   type Hex,
 } from 'viem';
-import { arbitrumSepolia } from 'viem/chains';
+import { normalize } from 'viem/ens';
+import { arbitrumSepolia, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 
 // USDC contract ABI (minimal)
@@ -31,6 +32,12 @@ const USDC_ABI = [
 // Contract addresses
 const USDC_ADDRESS = '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d';
 
+// Create ENS client for Ethereum Mainnet
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
 export interface DistributionResult {
   success: boolean;
   scopeTx?: Hex;
@@ -38,6 +45,22 @@ export interface DistributionResult {
   scopeBlockNumber?: bigint;
   coderBlockNumber?: bigint;
   error?: string;
+}
+
+// ENS resolution helper - uses Ethereum Mainnet for ENS
+async function resolveENS(ensName: string, fallbackAddress: string): Promise<{ address: string; displayName: string }> {
+  try {
+    const resolvedAddress = await ensClient.getEnsAddress({
+      name: normalize(ensName),
+    });
+    if (resolvedAddress) {
+      console.log(`[ENS] Resolved ${ensName} → ${resolvedAddress}`);
+      return { address: resolvedAddress, displayName: ensName };
+    }
+  } catch (error) {
+    console.log(`[ENS] Could not resolve ${ensName}, using fallback address`);
+  }
+  return { address: fallbackAddress as `0x${string}`, displayName: fallbackAddress };
 }
 
 /**
@@ -57,6 +80,11 @@ export async function distributePayment(
     const SCOPE_AGENT_ADDRESS = process.env.SCOPE_AGENT_ADDRESS!;
     const CODER_AGENT_ADDRESS = process.env.CODER_AGENT_ADDRESS!;
 
+    // Get ENS names from environment
+    const paymentAgentENS = process.env.PAYMENT_AGENT_ENS_NAME || 'payments.agentshawarma.eth';
+    const scopeAgentENS = process.env.SCOPE_AGENT_ENS_NAME || 'planner.agentshawarma.eth';
+    const coderAgentENS = process.env.CODER_AGENT_ENS_NAME || 'builder.agentshawarma.eth';
+
     // Create clients
     const publicClient = createPublicClient({
       chain: arbitrumSepolia,
@@ -69,6 +97,13 @@ export async function distributePayment(
       account: privateKeyToAccount(PAYMENT_AGENT_PRIVATE_KEY as `0x${string}`),
     });
 
+    // Resolve ENS names
+    const [paymentAgent, scopeAgent, coderAgent] = await Promise.all([
+      resolveENS(paymentAgentENS, PAYMENT_AGENT_ADDRESS),
+      resolveENS(scopeAgentENS, SCOPE_AGENT_ADDRESS),
+      resolveENS(coderAgentENS, CODER_AGENT_ADDRESS)
+    ]);
+
     // Check ETH balance before attempting distribution
     const ethBalance = await publicClient.getBalance({ 
       address: PAYMENT_AGENT_ADDRESS as `0x${string}` 
@@ -76,7 +111,7 @@ export async function distributePayment(
     
     if (ethBalance === 0n) {
       console.error('[Distribution] Cannot distribute: Payment Agent has no ETH for gas!');
-      console.error(`  Payment Agent address: ${PAYMENT_AGENT_ADDRESS}`);
+      console.error(`  Payment Agent: ${paymentAgent.displayName} (${PAYMENT_AGENT_ADDRESS})`);
       console.error('  Please send ETH to the Payment Agent on Arbitrum Sepolia');
       return { success: false, error: 'No ETH for gas fees' };
     }
@@ -86,8 +121,8 @@ export async function distributePayment(
     const coderAmount = amount - scopeAmount;
     
     console.log('[Distribution] Distributing funds:', {
-      scopeAgent: `${scopeAmount} (${splitPercentage}%)`,
-      coderAgent: `${coderAmount} (${100 - splitPercentage}%)`,
+      scopeAgent: `${scopeAgent.displayName}: ${scopeAmount} (${splitPercentage}%)`,
+      coderAgent: `${coderAgent.displayName}: ${coderAmount} (${100 - splitPercentage}%)`,
     });
     
     // Send to Scope Agent
@@ -99,13 +134,13 @@ export async function distributePayment(
         args: [SCOPE_AGENT_ADDRESS as `0x${string}`, scopeAmount],
       }),
     });
-    console.log(`[Distribution] Scope Agent transfer: ${scopeTx}`);
+    console.log(`[Distribution] ${scopeAgent.displayName} transfer: ${scopeTx}`);
     
     // Wait for Scope Agent transaction to be mined
     const scopeReceipt = await publicClient.waitForTransactionReceipt({
       hash: scopeTx,
     });
-    console.log(`[Distribution] Scope Agent transfer confirmed in block ${scopeReceipt.blockNumber}`);
+    console.log(`[Distribution] ${scopeAgent.displayName} transfer confirmed in block ${scopeReceipt.blockNumber}`);
     
     // Send to Coder Agent (nonce will be automatically incremented)
     const coderTx = await walletClient.sendTransaction({
@@ -116,13 +151,13 @@ export async function distributePayment(
         args: [CODER_AGENT_ADDRESS as `0x${string}`, coderAmount],
       }),
     });
-    console.log(`[Distribution] Coder Agent transfer: ${coderTx}`);
+    console.log(`[Distribution] ${coderAgent.displayName} transfer: ${coderTx}`);
     
     // Wait for Coder Agent transaction to be mined
     const coderReceipt = await publicClient.waitForTransactionReceipt({
       hash: coderTx,
     });
-    console.log(`[Distribution] Coder Agent transfer confirmed in block ${coderReceipt.blockNumber}`);
+    console.log(`[Distribution] ${coderAgent.displayName} transfer confirmed in block ${coderReceipt.blockNumber}`);
     
     console.log('[Distribution] Distribution complete!');
     

@@ -11,13 +11,14 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { createWalletClient, createPublicClient, http, parseUnits, parseEventLogs, parseAbiItem } from 'viem';
-import { sepolia, arbitrumSepolia } from 'viem/chains';
+import { sepolia, arbitrumSepolia, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { normalize } from 'viem/ens';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -47,6 +48,11 @@ const PAYMENT_AGENT_ADDRESS = process.env.PAYMENT_AGENT_ADDRESS;
 const SCOPE_AGENT_ADDRESS = process.env.SCOPE_AGENT_ADDRESS;
 const CODER_AGENT_ADDRESS = process.env.CODER_AGENT_ADDRESS;
 
+// Get ENS names from env
+const PAYMENT_AGENT_ENS = process.env.PAYMENT_AGENT_ENS_NAME || 'payments.agentshawarma.eth';
+const SCOPE_AGENT_ENS = process.env.SCOPE_AGENT_ENS_NAME || 'planner.agentshawarma.eth';
+const CODER_AGENT_ENS = process.env.CODER_AGENT_ENS_NAME || 'builder.agentshawarma.eth';
+
 if (!USER_PRIVATE_KEY || !PAYMENT_AGENT_ADDRESS) {
   console.error('❌ Missing required environment variables');
   process.exit(1);
@@ -70,6 +76,27 @@ function log(message, color = colors.reset) {
 
 function logStep(step, message) {
   console.log(`\n${colors.bright}${colors.blue}[Step ${step}]${colors.reset} ${message}`);
+}
+
+// Create ENS client for Ethereum Mainnet
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
+// ENS resolution helper - uses Ethereum Mainnet for ENS
+async function resolveENS(ensName, fallbackAddress) {
+  try {
+    const resolvedAddress = await ensClient.getEnsAddress({
+      name: normalize(ensName),
+    });
+    if (resolvedAddress) {
+      return { address: resolvedAddress, displayName: ensName };
+    }
+  } catch (error) {
+    // Silently fall back
+  }
+  return { address: fallbackAddress, displayName: fallbackAddress };
 }
 
 // ABIs
@@ -164,23 +191,26 @@ async function checkBalances() {
   });
 
   const addresses = {
-    'Payment Agent': PAYMENT_AGENT_ADDRESS,
-    'Scope Agent': SCOPE_AGENT_ADDRESS,
-    'Coder Agent': CODER_AGENT_ADDRESS,
+    'Payment Agent': { address: PAYMENT_AGENT_ADDRESS, ens: PAYMENT_AGENT_ENS },
+    'Scope Agent': { address: SCOPE_AGENT_ADDRESS, ens: SCOPE_AGENT_ENS },
+    'Coder Agent': { address: CODER_AGENT_ADDRESS, ens: CODER_AGENT_ENS },
   };
 
   log('\n💰 Current USDC Balances:', colors.yellow);
   
-  for (const [name, address] of Object.entries(addresses)) {
+  for (const [name, info] of Object.entries(addresses)) {
+    // Resolve ENS using Ethereum Sepolia
+    const resolved = await resolveENS(info.ens, info.address);
+    
     const balance = await publicClient.readContract({
       address: USDC_ADDRESS_ARB_SEPOLIA,
       abi: USDC_ABI,
       functionName: 'balanceOf',
-      args: [address],
+      args: [info.address],
     });
     
     const balanceInUsdc = Number(balance) / 1e6;
-    log(`  ${name}: ${balanceInUsdc} USDC`, colors.cyan);
+    log(`  ${name} (${resolved.displayName}): ${balanceInUsdc} USDC`, colors.cyan);
   }
 }
 
@@ -228,8 +258,45 @@ async function main() {
       },
     });
     
-    log('✅ Payment listener started (2.5 minute timeout)', colors.green);
-    log(`   Watching for ${PAYMENT_AMOUNT} USDC mint to Payment Agent`, colors.cyan);
+    // Parse and display the payment URL and details
+    if (paymentResult && paymentResult.content) {
+      try {
+        // Extract the deeply nested result
+        let resultText = '';
+        if (paymentResult.content[0]?.resource?.text) {
+          // Parse the outer JSON
+          const outerData = JSON.parse(paymentResult.content[0].resource.text);
+          // Extract the inner text from the message
+          if (outerData.status?.message?.parts?.[0]?.text) {
+            resultText = outerData.status.message.parts[0].text;
+          }
+        }
+        
+        if (!resultText) {
+          throw new Error('Could not extract result text');
+        }
+        
+        const result = JSON.parse(resultText);
+        
+        if (result.paymentUrl) {
+          log(`\n💳 Payment URL: ${result.paymentUrl}`, colors.bright + colors.cyan);
+        }
+        
+        if (result.paymentDetails) {
+          const details = result.paymentDetails;
+          log('\n📋 Payment Details:', colors.yellow);
+          log(`   Recipient: ${details.recipientENS}`, colors.cyan);
+          log(`   Amount: ${details.amount} USDC`, colors.cyan);
+          log(`   Split: ${details.splitPercentage}% to ${details.scopeAgent.ens}, ${100 - details.splitPercentage}% to ${details.coderAgent.ens}`, colors.cyan);
+        }
+      } catch (e) {
+        // Fallback to generic message if parsing fails
+        log('✅ Payment listener started', colors.green);
+      }
+    }
+    
+    log('\n✅ Payment listener active (2.5 minute timeout)', colors.green);
+    log(`   Watching for ${PAYMENT_AMOUNT} USDC mint to ${PAYMENT_AGENT_ENS}`, colors.cyan);
     
   } catch (error) {
     log(`❌ Failed to start payment listener: ${error.message}`, colors.red);
@@ -240,7 +307,11 @@ async function main() {
     }
   }
 
-  // Step 3: Execute CCTP transfer immediately
+  // Add a small delay to ensure the listener is fully ready
+  log('\n⏳ Waiting 3 seconds for listener to initialize...', colors.yellow);
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  // Step 3: Execute CCTP transfer
   logStep('3', 'Executing CCTP transfer...');
   
   const account = privateKeyToAccount(`0x${USER_PRIVATE_KEY.replace(/^0x/, '')}`);
@@ -385,6 +456,7 @@ async function main() {
     log('\n✅ MintAndWithdraw event confirmed!', colors.green);
     log(`   Block: ${mintLogs[0].blockNumber}`, colors.cyan);
     log(`   Amount: ${Number(mintLogs[0].args.amount) / 1e6} USDC`, colors.cyan);
+    log(`   Recipient: ${PAYMENT_AGENT_ENS}`, colors.cyan);
   }
   
   log('\n✨ Demo complete!', colors.bright + colors.green);

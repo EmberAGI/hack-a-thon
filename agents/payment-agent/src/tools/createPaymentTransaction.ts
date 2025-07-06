@@ -1,6 +1,6 @@
 /**
  * Create Payment Transaction Tool
- * Generates unsigned USDC transaction data and starts a listener for automatic distribution
+ * Generates payment URL with ENS names and starts a listener for automatic distribution
  */
 
 import { z } from 'zod';
@@ -14,8 +14,37 @@ import {
   parseAbiItem,
   type Log
 } from 'viem';
-import { arbitrumSepolia } from 'viem/chains';
+import { normalize } from 'viem/ens';
+import { arbitrumSepolia, mainnet } from 'viem/chains';
 import { distributePayment } from './distributionLogic.js';
+
+// Create public clients
+const publicClient = createPublicClient({
+  chain: arbitrumSepolia,
+  transport: http(process.env.RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc'),
+});
+
+// Separate client for ENS resolution on Ethereum Mainnet
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
+// ENS resolution helper - uses Ethereum Mainnet for ENS
+async function resolveENS(ensName: string, fallbackAddress: string): Promise<{ address: string; displayName: string }> {
+  try {
+    const resolvedAddress = await ensClient.getEnsAddress({
+      name: normalize(ensName),
+    });
+    if (resolvedAddress) {
+      console.log(`[ENS] Resolved ${ensName} → ${resolvedAddress}`);
+      return { address: resolvedAddress, displayName: ensName };
+    }
+  } catch (error) {
+    console.log(`[ENS] Could not resolve ${ensName}, using fallback address`);
+  }
+  return { address: fallbackAddress as `0x${string}`, displayName: fallbackAddress };
+}
 
 const CreatePaymentParams = z.object({
   amount: z.string().describe('Amount of USDC to request'),
@@ -46,12 +75,6 @@ const PAYMENT_AGENT_ADDRESS = process.env.PAYMENT_AGENT_ADDRESS!;
 const MINT_AND_WITHDRAW_EVENT = parseAbiItem(
   'event MintAndWithdraw(address indexed mintRecipient, uint256 amount, address indexed mintToken)'
 );
-
-// Create public client
-const publicClient = createPublicClient({
-  chain: arbitrumSepolia,
-  transport: http(process.env.RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc'),
-});
 
 // Background polling function
 async function pollForMintAndDistribute(
@@ -128,10 +151,27 @@ async function pollForMintAndDistribute(
 
 export const createPaymentTransactionTool: VibkitToolDefinition<typeof CreatePaymentParams> = {
   name: 'create-payment-transaction',
-  description: 'Generate unsigned USDC transaction data and start payment listener',
+  description: 'Generate payment URL with ENS names and start payment listener',
   parameters: CreatePaymentParams,
   execute: async (args) => {
     console.log('[CreatePaymentTransaction] Starting with args:', args);
+    
+    // Get ENS names from environment
+    const paymentAgentENS = process.env.PAYMENT_AGENT_ENS_NAME || 'payments.agentshawarma.eth';
+    const scopeAgentENS = process.env.SCOPE_AGENT_ENS_NAME || 'planner.agentshawarma.eth';
+    const coderAgentENS = process.env.CODER_AGENT_ENS_NAME || 'builder.agentshawarma.eth';
+    
+    // Resolve ENS names
+    const [paymentAgent, scopeAgent, coderAgent] = await Promise.all([
+      resolveENS(paymentAgentENS, PAYMENT_AGENT_ADDRESS),
+      resolveENS(scopeAgentENS, process.env.SCOPE_AGENT_ADDRESS!),
+      resolveENS(coderAgentENS, process.env.CODER_AGENT_ADDRESS!)
+    ]);
+    
+    console.log('[CreatePaymentTransaction] ENS Resolution:');
+    console.log(`  Payment Agent: ${paymentAgent.displayName} (${paymentAgent.address})`);
+    console.log(`  Scope Agent: ${scopeAgent.displayName} (${scopeAgent.address})`);
+    console.log(`  Coder Agent: ${coderAgent.displayName} (${coderAgent.address})`);
     
     // Check if Payment Agent has ETH for gas
     const ethBalance = await publicClient.getBalance({ 
@@ -149,12 +189,9 @@ export const createPaymentTransactionTool: VibkitToolDefinition<typeof CreatePay
     // Parse amount to USDC decimals (6)
     const amountInUnits = parseUnits(args.amount, 6);
     
-    // Create unsigned transaction data
-    const txData = encodeFunctionData({
-      abi: USDC_ABI,
-      functionName: 'transfer',
-      args: [PAYMENT_AGENT_ADDRESS as `0x${string}`, amountInUnits],
-    });
+    // Generate payment URL
+    const domain = process.env.PAYMENT_URL_DOMAIN || 'https://pay.example.com';
+    const paymentUrl = `${domain}?amount=${args.amount}&ens=${paymentAgent.displayName}`;
     
     // Start background listener
     pollForMintAndDistribute(
@@ -169,32 +206,36 @@ export const createPaymentTransactionTool: VibkitToolDefinition<typeof CreatePay
       }
     );
     
-    console.log('[CreatePaymentTransaction] Transaction data generated');
+    console.log('[CreatePaymentTransaction] Payment URL generated');
     console.log('[CreatePaymentTransaction] CCTP mint listener started (1s polling)');
     
-    // Return transaction details
+    // Return payment URL and details
     const result = {
       success: true,
-      transactionData: {
-        to: USDC_ADDRESS,
-        data: txData,
-        value: '0x0',
-        chainId: 421614, // Arbitrum Sepolia
-      },
+      paymentUrl,
       paymentDetails: {
         amount: args.amount,
         payerAddress: args.payerAddress,
+        recipientENS: paymentAgent.displayName,
         recipientAddress: PAYMENT_AGENT_ADDRESS,
         splitPercentage: args.splitPercentage,
-        scopeAgentAmount: (parseFloat(args.amount) * args.splitPercentage / 100).toFixed(2),
-        coderAgentAmount: (parseFloat(args.amount) * (100 - args.splitPercentage) / 100).toFixed(2),
+        scopeAgent: {
+          ens: scopeAgent.displayName,
+          address: scopeAgent.address,
+          amount: (parseFloat(args.amount) * args.splitPercentage / 100).toFixed(2),
+        },
+        coderAgent: {
+          ens: coderAgent.displayName,
+          address: coderAgent.address,
+          amount: (parseFloat(args.amount) * (100 - args.splitPercentage) / 100).toFixed(2),
+        },
       },
       listenerActive: true,
-      message: 'Payment transaction data generated. CCTP mint listener active (1s polling) for automatic distribution upon payment receipt.',
+      message: `Payment URL generated: ${paymentUrl}\n\nCCTP mint listener active (1s polling) for automatic distribution upon payment receipt.`,
     };
     
     return createSuccessTask(
-      'payment-transaction-created',
+      'payment-url-created',
       undefined,
       JSON.stringify(result, null, 2)
     );
