@@ -353,12 +353,6 @@ export function useCrossChainTransfer() {
       const finalityThreshold = transferType === "fast" ? 1000 : 2000;
       const maxFee = amount - 1n;
 
-      // Get hardcoded recipient address from environment
-      const recipientAddress = process.env.NEXT_PUBLIC_RECIPIENT_ADDRESS;
-      if (!recipientAddress) {
-        throw new Error("Recipient address not configured. Please set NEXT_PUBLIC_RECIPIENT_ADDRESS in your environment.");
-      }
-
       // Handle Solana destination addresses differently
       let mintRecipient: string;
       if (isSolanaChain(destinationChainId)) {
@@ -367,7 +361,7 @@ export function useCrossChainTransfer() {
         const usdcMint = new PublicKey(
           CHAIN_IDS_TO_USDC_ADDRESSES[SupportedChainId.SOLANA_DEVNET] as string
         );
-        const destinationWallet = new PublicKey(recipientAddress);
+        const destinationWallet = new PublicKey(destinationAddress);
         const tokenAccount = await getAssociatedTokenAddress(
           usdcMint,
           destinationWallet
@@ -375,7 +369,7 @@ export function useCrossChainTransfer() {
         mintRecipient = hexlify(bs58.decode(tokenAccount.toBase58()));
       } else {
         // For EVM destinations, pad the hex address
-        mintRecipient = `0x${recipientAddress
+        mintRecipient = `0x${destinationAddress
           .replace(/^0x/, "")
           .padStart(64, "0")}`;
       }
@@ -828,22 +822,61 @@ export function useCrossChainTransfer() {
     sourceChainId: number,
     destinationChainId: number,
     amount: string,
-    transferType: "fast" | "standard"
+    transferType: "fast" | "standard",
+    destinationAddress?: string
   ) => {
     try {
       const numericAmount = parseUnits(amount, DEFAULT_DECIMALS);
 
-      // Get hardcoded recipient address from environment
-      const recipientAddress = process.env.NEXT_PUBLIC_RECIPIENT_ADDRESS;
-      if (!recipientAddress) {
-        throw new Error("Recipient address not configured. Please set NEXT_PUBLIC_RECIPIENT_ADDRESS in your environment.");
+      // Use provided destination address or fallback to environment variable
+      let finalDestinationAddress: string;
+      
+      if (destinationAddress && destinationAddress.trim()) {
+        const trimmedAddress = destinationAddress.trim();
+        
+        // Check if it's an ENS name and resolve it
+        if (trimmedAddress.endsWith(".eth")) {
+          addLog(`Resolving ENS name: ${trimmedAddress}...`);
+          try {
+            const { createPublicClient, http } = await import("viem");
+            const { mainnet } = await import("viem/chains");
+            
+            const publicClient = createPublicClient({
+              chain: mainnet,
+              transport: http("https://eth.llamarpc.com"),
+            });
+            
+            const resolvedAddress = await publicClient.getEnsAddress({
+              name: trimmedAddress,
+            });
+            
+            if (!resolvedAddress) {
+              throw new Error(`ENS name ${trimmedAddress} could not be resolved`);
+            }
+            
+            finalDestinationAddress = resolvedAddress;
+            addLog(`ENS resolved: ${trimmedAddress} → ${resolvedAddress}`);
+          } catch (error) {
+            throw new Error(`Failed to resolve ENS name ${trimmedAddress}: ${error instanceof Error ? error.message : "Unknown error"}`);
+          }
+        } else {
+          // Use address as-is
+          finalDestinationAddress = trimmedAddress;
+        }
+      } else {
+        // Fallback to hardcoded recipient address from environment
+        const recipientAddress = process.env.NEXT_PUBLIC_RECIPIENT_ADDRESS;
+        if (!recipientAddress) {
+          throw new Error("No destination address provided and no fallback recipient address configured. Please provide a destination address or set NEXT_PUBLIC_RECIPIENT_ADDRESS in your environment.");
+        }
+        finalDestinationAddress = recipientAddress;
       }
 
       // Handle different chain types
       const isSourceSolana = isSolanaChain(sourceChainId);
       const isDestinationSolana = isSolanaChain(destinationChainId);
 
-      let sourceClient: any, destinationClient: any, defaultDestination: string;
+      let sourceClient: any, destinationClient: any;
 
       // Get source client and ensure wallet is on source chain
       if (isSourceSolana) {
@@ -851,18 +884,6 @@ export function useCrossChainTransfer() {
         sourceClient = getSolanaKeypair(privateKey);
       } else {
         sourceClient = await ensureWalletReady(sourceChainId);
-      }
-
-      // Set destination address (hardcoded recipient)
-      if (isDestinationSolana) {
-        // For Solana destinations, we'll need to handle this differently
-        // For now, use the Solana keypair's public key as destination
-        const privateKey = getSolanaPrivateKey();
-        const solanaKeypair = getSolanaKeypair(privateKey);
-        defaultDestination = solanaKeypair.publicKey.toString();
-      } else {
-        // For EVM destinations, use the hardcoded recipient address
-        defaultDestination = recipientAddress;
       }
 
       // Check native balance for destination chain
@@ -900,7 +921,7 @@ export function useCrossChainTransfer() {
           sourceChainId,
           numericAmount,
           destinationChainId,
-          defaultDestination,
+          finalDestinationAddress,
           transferType
         );
       } else {
@@ -909,7 +930,7 @@ export function useCrossChainTransfer() {
           sourceChainId,
           numericAmount,
           destinationChainId,
-          defaultDestination,
+          finalDestinationAddress,
           transferType
         );
       }
