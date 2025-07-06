@@ -1,0 +1,90 @@
+# Project: Multi-Agent Development Workflow - Scope & Coder Agents
+Last Updated: 2025-01-05T01:20:00Z
+Current Role: Planner
+
+## Background and Motivation
+**HACKATHON PROJECT - Phase 2**: Building on the completed Payment Agent, we now need to create the Scope and Coder agents. These agents will complete the multi-agent development workflow where:
+1. **Scope Agent**: Builds development scope and plans for applications
+2. **Coder Agent**: Implements the scope passed to it and deploys working applications
+3. **Payment Agent**: (Already complete) Handles payment distribution
+
+**Key Constraint**: Like the Payment Agent, both Scope and Coder agents will NOT contain LLMs - they will have mock handler tools for now.
+
+## Previous Work Summary (from Phase 1)
+- **Completed**: Payment Agent with CCTP mint detection and automatic fund distribution
+- **Wallet Infrastructure**: Three EOA wallets generated:
+  - Scope Agent: 0x3F9032f96A64F3396FdFEEe3f26B798B1a11b65
+  - Payment Agent: 0xDd418eC7d4AfF6d199ACd537e962664f34c9F7c7
+  - Coder Agent: 0x3BE92Fe06409096711087280CD6661854Ca4724E
+- **Architecture**: Vibekit v2 framework, MCP servers, no unit tests (hackathon approach)
+- **Location**: All agents in `/agents/` directory
+
+## Key Challenges and Analysis
+- **Mock Implementations**: Since no LLMs, need realistic mock responses that demonstrate capabilities
+- **Tool Design**: Create tools that represent the agents' intended functionality
+- **Descriptions**: Ensure both agents have appropriate descriptions for their purpose
+- **Integration Points**: Consider how these agents would interact in a real workflow
+
+## High-level Task Breakdown
+
+### Task 1: Scope Agent Implementation
+- Description: Create Scope Agent with tools for building development scopes and plans
+- Success Criteria: 
+  - Agent starts with `pnpm dev`
+  - Has appropriate skill descriptions
+  - Mock tools return realistic scope/plan responses
+- Dependencies: None (can work in parallel with Task 2)
+- Status: Not Started
+
+### Task 2: Coder Agent Implementation  
+- Description: Create Coder Agent with tools for implementing development tasks
+- Success Criteria:
+  - Agent starts with `pnpm dev`
+  - Has appropriate skill descriptions
+  - Mock tools simulate code generation and deployment
+- Dependencies: None (can work in parallel with Task 1)
+- Status: Not Started
+
+### Task 3: Integration Testing
+- Description: Test all three agents together in a simulated workflow
+- Success Criteria: Can demonstrate end-to-end flow for judges
+- Dependencies: Tasks 1 & 2
+- Status: Not Started
+
+## Project Status Board
+- [ ] 1.1: Create Scope Agent basic structure (index.ts, package.json)
+- [ ] 1.2: Implement scope-building skill with mock tools
+- [ ] 1.3: Add realistic mock responses for scope generation
+- [ ] 2.1: Create Coder Agent basic structure (index.ts, package.json)
+- [ ] 2.2: Implement code-development skill with mock tools  
+- [ ] 2.3: Add realistic mock responses for code generation
+- [ ] 3.1: Create integration demo script
+- [ ] 3.2: Document the complete workflow
+
+## Current Status / Progress Tracking
+**2025-01-05T01:20:00Z - Planning Phase**
+- Created new scratchpad for Phase 2
+- Previous Payment Agent work archived in scratchpad-v1-payment-agent.mdc
+- Ready to begin implementation of Scope and Coder agents
+
+## Executor's Feedback or Assistance Requests
+N/A - Planning phase
+
+## Lessons Learned
+- **From Phase 1**: Direct tool implementations without LLMs work well for demos
+- **From Phase 1**: Mock handlers can effectively demonstrate agent capabilities
+- **From Phase 1**: Focus on working demos over comprehensive error handling
+
+## Rationale Log
+- **Decision:** Create agents without LLMs using mock handlers
+  **Rationale:** Consistent with Payment Agent approach, simpler for hackathon, demonstrates architecture without AI complexity
+  **Trade-offs:** Less dynamic than real AI agents, but perfect for demonstrating multi-agent workflow
+  **Date:** 2025-01-05
+
+- **Decision:** Implement Scope and Coder agents in parallel
+  **Rationale:** No dependencies between them, faster development, can split work if needed
+  **Trade-offs:** Might need minor adjustments for integration, but minimal risk
+  **Date:** 2025-01-05
+
+## Version History
+- 2025-01-05T01:20:00Z: Initial plan for Scope and Coder agents created

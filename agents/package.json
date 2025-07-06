@@ -1,0 +1,14 @@
+{
+  "name": "agent-wallet-generator",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "generate": "node generate-wallets.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "axios": "^1.10.0",
+    "dotenv": "^16.3.1",
+    "viem": "^2.23.5"
+  }
+}
