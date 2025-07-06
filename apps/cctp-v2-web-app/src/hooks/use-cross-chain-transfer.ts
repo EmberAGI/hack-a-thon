@@ -353,6 +353,12 @@ export function useCrossChainTransfer() {
       const finalityThreshold = transferType === "fast" ? 1000 : 2000;
       const maxFee = amount - 1n;
 
+      // Get hardcoded recipient address from environment
+      const recipientAddress = process.env.NEXT_PUBLIC_RECIPIENT_ADDRESS;
+      if (!recipientAddress) {
+        throw new Error("Recipient address not configured. Please set NEXT_PUBLIC_RECIPIENT_ADDRESS in your environment.");
+      }
+
       // Handle Solana destination addresses differently
       let mintRecipient: string;
       if (isSolanaChain(destinationChainId)) {
@@ -361,7 +367,7 @@ export function useCrossChainTransfer() {
         const usdcMint = new PublicKey(
           CHAIN_IDS_TO_USDC_ADDRESSES[SupportedChainId.SOLANA_DEVNET] as string
         );
-        const destinationWallet = new PublicKey(destinationAddress);
+        const destinationWallet = new PublicKey(recipientAddress);
         const tokenAccount = await getAssociatedTokenAddress(
           usdcMint,
           destinationWallet
@@ -369,7 +375,7 @@ export function useCrossChainTransfer() {
         mintRecipient = hexlify(bs58.decode(tokenAccount.toBase58()));
       } else {
         // For EVM destinations, pad the hex address
-        mintRecipient = `0x${destinationAddress
+        mintRecipient = `0x${recipientAddress
           .replace(/^0x/, "")
           .padStart(64, "0")}`;
       }
@@ -626,7 +632,7 @@ export function useCrossChainTransfer() {
           ...contractConfig,
           functionName: "receiveMessage",
           args: [attestation.message, attestation.attestation],
-          account: client.account,
+          account: walletAddress as `0x${string}`,
         });
 
         // Add 20% buffer to gas estimate
@@ -641,7 +647,7 @@ export function useCrossChainTransfer() {
           maxFeePerGas: feeData.maxFeePerGas,
           maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
           chain: chains[destinationChainId as keyof typeof chains],
-          account: client.account!,
+          account: walletAddress as `0x${string}`,
         });
 
         addLog(`Mint Tx: ${tx}`);
@@ -827,13 +833,19 @@ export function useCrossChainTransfer() {
     try {
       const numericAmount = parseUnits(amount, DEFAULT_DECIMALS);
 
+      // Get hardcoded recipient address from environment
+      const recipientAddress = process.env.NEXT_PUBLIC_RECIPIENT_ADDRESS;
+      if (!recipientAddress) {
+        throw new Error("Recipient address not configured. Please set NEXT_PUBLIC_RECIPIENT_ADDRESS in your environment.");
+      }
+
       // Handle different chain types
       const isSourceSolana = isSolanaChain(sourceChainId);
       const isDestinationSolana = isSolanaChain(destinationChainId);
 
       let sourceClient: any, destinationClient: any, defaultDestination: string;
 
-      // Get source client
+      // Get source client and ensure wallet is on source chain
       if (isSourceSolana) {
         const privateKey = getSolanaPrivateKey();
         sourceClient = getSolanaKeypair(privateKey);
@@ -841,14 +853,16 @@ export function useCrossChainTransfer() {
         sourceClient = await ensureWalletReady(sourceChainId);
       }
 
-      // Get destination client and address
+      // Set destination address (hardcoded recipient)
       if (isDestinationSolana) {
+        // For Solana destinations, we'll need to handle this differently
+        // For now, use the Solana keypair's public key as destination
         const privateKey = getSolanaPrivateKey();
-        destinationClient = getSolanaKeypair(privateKey);
-        defaultDestination = destinationClient.publicKey.toString();
+        const solanaKeypair = getSolanaKeypair(privateKey);
+        defaultDestination = solanaKeypair.publicKey.toString();
       } else {
-        destinationClient = await ensureWalletReady(sourceChainId);
-        defaultDestination = walletAddress!;
+        // For EVM destinations, use the hardcoded recipient address
+        defaultDestination = recipientAddress;
       }
 
       // Check native balance for destination chain
@@ -913,14 +927,19 @@ export function useCrossChainTransfer() {
         throw new Error("Insufficient native token for gas fees");
       }
 
-      // Execute mint step
+      // Execute mint step - get destination client only when needed
       if (isDestinationSolana) {
+        // For Solana destinations, use the Solana keypair
+        const privateKey = getSolanaPrivateKey();
+        destinationClient = getSolanaKeypair(privateKey);
         await mintSolanaUSDC(
           destinationClient,
           destinationChainId,
           attestation
         );
       } else {
+        // For EVM destinations, switch to destination chain and mint
+        destinationClient = await ensureWalletReady(destinationChainId);
         await mintUSDC(destinationClient, destinationChainId, attestation);
       }
     } catch (error) {

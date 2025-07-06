@@ -49,7 +49,7 @@ export default function Home() {
     SupportedChainId.ETH_SEPOLIA
   );
   const [destinationChain, setDestinationChain] = useState<SupportedChainId>(
-    SupportedChainId.AVAX_FUJI
+    SupportedChainId.ARBITRUM_SEPOLIA
   );
   const [amount, setAmount] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
